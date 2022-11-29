@@ -1,0 +1,72 @@
+version: "3.8"
+
+services:
+  keeper:
+    image: $REGISTRY/oryd/oathkeeper:$OATHKEEPER_VER
+    container_name: keeper
+    restart: on-failure
+    ports:
+      - 4455:4455
+      - 4456:4456
+    volumes:
+      - ./oathkeeper:/etc/config/oathkeeper
+    environment:
+      - LOG_LEVEL=debug
+    command: serve proxy -c /etc/config/oathkeeper/oathkeeper.yml
+    networks:
+      - intranet
+    depends_on:
+      - kratos
+
+  kratos:
+    image: $REGISTRY/oryd/kratos:$KRATOS_VER
+    container_name: kratos
+    restart: on-failure
+    environment:
+      - SERVE_PUBLIC_BASE_URL=https://id.neurodyne.pro/.ory/kratos/public/
+      - DSN=$DSN_KRATOS
+    ports:
+      - 4433:4433
+      - 4434:4434
+    volumes:
+      - ./kratos:/etc/config/kratos
+    command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+    networks:
+      - intranet
+
+  kratos-migrate:
+    image: $REGISTRY/oryd/kratos:$KRATOS_VER
+    container_name: kratos-migrate
+    environment:
+      - DSN=$DSN_KRATOS
+    volumes:
+      - ./kratos:/etc/config/kratos
+    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes
+    networks:
+      - intranet
+
+  kratos-ui:
+    image: $REGISTRY/oryd/kratos-selfservice-ui-node:$KRATOS_VER
+    container_name: kratos-ui
+    restart: on-failure
+    environment:
+      - PORT=4435
+      - KRATOS_PUBLIC_URL=https://api.id.neurodyne.pro/
+      - KRATOS_BROWSER_URL=https://id.neurodyne.pro/.ory/kratos/public
+      - JWKS_URL=https://id.neurodyne.pro/jwks/.well-known/jwks.json
+      - SECURITY_MODE=jwks
+    networks:
+      - intranet
+
+  mailslurper:
+    image: $REGISTRY/oryd/mailslurper:latest-smtps
+    container_name: mail
+    restart: on-failure
+    ports:
+      - 4436:4436
+      - 4437:4437
+    networks:
+      - intranet
+
+networks:
+  intranet:
